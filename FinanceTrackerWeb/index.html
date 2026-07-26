@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0f1a">
+<title>Finans Takibi</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f2f2f7;
+    --card: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6e6e73;
+    --border: #e5e5ea;
+    --blue: #007aff;
+    --green: #34c759;
+    --red: #ff3b30;
+    --orange: #ff9500;
+    --tabbar-bg: rgba(255,255,255,0.92);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --card: #1c1c1e;
+      --text: #f2f2f7;
+      --muted: #9b9ba1;
+      --border: #2c2c2e;
+      --tabbar-bg: rgba(28,28,30,0.92);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  }
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+  }
+  header.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: 14px 20px 10px;
+    background: var(--bg);
+  }
+  header.topbar h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  main { padding: 4px 16px 24px; max-width: 480px; margin: 0 auto; }
+  .tab { display: none; }
+  .tab.active { display: block; animation: fadein .15s ease; }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .card-title {
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 4px 6px;
+    letter-spacing: .02em;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 16px;
+    gap: 10px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .label { color: var(--text); }
+  .row.bold .label, .row.bold .value { font-weight: 700; }
+  .row input[type="text"] {
+    border: none;
+    background: transparent;
+    text-align: right;
+    font-size: 16px;
+    color: var(--text);
+    width: 140px;
+    outline: none;
+  }
+  .value.green { color: var(--green); }
+  .value.red { color: var(--red); }
+  .value.orange { color: var(--orange); }
+  .value.blue { color: var(--blue); }
+
+  button.primary {
+    width: 100%;
+    padding: 14px;
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--blue);
+    border: none;
+    border-radius: 14px;
+    margin-bottom: 18px;
+  }
+  button.primary:active { opacity: .8; }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+  }
+  .empty-state .icon { font-size: 40px; margin-bottom: 10px; }
+  .empty-state .desc { font-size: 14px; margin-top: 6px; }
+
+  .expense-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .expense-row:last-child { border-bottom: none; }
+  .expense-note { font-size: 16px; }
+  .expense-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .expense-amount { color: var(--red); font-weight: 600; white-space: nowrap; }
+  .delete-btn {
+    border: none;
+    background: none;
+    color: var(--red);
+    font-size: 20px;
+    padding: 4px 8px;
+    margin-left: 6px;
+  }
+
+  .section-label { font-size: 13px; color: var(--muted); padding: 10px 4px 6px; }
+
+  .chart-wrap { background: var(--card); border-radius: 14px; padding: 12px 8px; }
+
+  input[type="range"] { width: 100%; }
+  .slider-value { font-size: 15px; margin-bottom: 6px; }
+  .stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+  }
+  .stepper button {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: var(--bg);
+    color: var(--blue);
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  nav.tabbar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    background: var(--tabbar-bg);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 10;
+  }
+  nav.tabbar button {
+    flex: 1;
+    border: none;
+    background: none;
+    padding: 8px 0 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  nav.tabbar button .icon { font-size: 21px; line-height: 1; }
+  nav.tabbar button.active { color: var(--blue); }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    display: flex;
+    align-items: flex-end;
+    z-index: 20;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal {
+    background: var(--bg);
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: slideup .2s ease;
+  }
+  @keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-header h2 { font-size: 17px; margin: 0; }
+  .modal-header button { border: none; background: none; font-size: 16px; color: var(--blue); }
+  .modal-header button#saveExpenseBtn { font-weight: 700; }
+  .modal-body { padding: 4px 16px 20px; }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .field label { font-size: 13px; color: var(--muted); }
+  .field input {
+    border: none;
+    background: transparent;
+    font-size: 17px;
+    color: var(--text);
+    outline: none;
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    background: var(--red);
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 14px;
+    max-width: 85%;
+    text-align: center;
+    z-index: 30;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+  .toast.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header class="topbar"><h1 id="pageTitle">Finans Takibi</h1></header>
+
+<main>
+
+  <!-- Ana Sayfa -->
+  <section id="tab-home" class="tab active">
+    <div class="card-title">Gelir ve Borç</div>
+    <div class="card">
+      <div class="row">
+        <span class="label">Toplam Gelir</span>
+        <input id="incomeInput" type="text" inputmode="decimal" placeholder="0">
+      </div>
+      <div class="row">
+        <span class="label">Toplam Borç</span>
+        <input id="debtInput" type="text" inputmode="decimal" placeholder="0">
+      </div>
+    </div>
+
+    <div class="card-title">Özet</div>
+    <div class="card">
+      <div class="row">
+        <span class="label">Toplam Gelir</span>
+        <span class="value green" id="summaryIncome">₺0</span>
+      </div>
+      <div class="row">
+        <span class="label">Toplam Borç</span>
+        <span class="value red" id="summaryDebt">₺0</span>
+      </div>
+      <div class="row">
+        <span class="label">Toplam Harcama</span>
+        <span class="value orange" id="summaryExpenses">₺0</span>
+      </div>
+      <div class="row bold">
+        <span class="label">Kalan Bakiye</span>
+        <span class="value blue" id="summaryRemaining">₺0</span>
+      </div>
+    </div>
+
+    <button class="primary" id="openAddExpenseBtn">+ Harcama Ekle</button>
+  </section>
+
+  <!-- Harcamalar -->
+  <section id="tab-expenses" class="tab">
+    <div class="section-label" id="expenseCountLabel">Toplam 0 harcama</div>
+    <div class="card" id="expenseListCard"></div>
+  </section>
+
+  <!-- Grafik -->
+  <section id="tab-chart" class="tab">
+    <div class="chart-wrap" id="chartWrap"></div>
+  </section>
+
+  <!-- Senaryo -->
+  <section id="tab-scenario" class="tab">
+    <div class="card-title">Senaryo Ayarları</div>
+    <div class="card">
+      <div class="row" style="flex-direction:column; align-items:stretch;">
+        <div class="slider-value" id="dailySpendingLabel">Günlük Harcama: ₺0</div>
+        <input type="range" id="dailySpendingSlider" min="0" max="1000" step="10" value="0">
+      </div>
+      <div class="row">
+        <span class="label" id="dayCountLabel">Gün Sayısı: 30</span>
+        <div class="stepper">
+          <button id="dayCountMinus">−</button>
+          <button id="dayCountPlus">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-title">Sonuç</div>
+    <div class="card">
+      <div class="row">
+        <span class="label">Mevcut Bakiye</span>
+        <span class="value" id="scenarioCurrent">₺0</span>
+      </div>
+      <div class="row bold">
+        <span class="label" id="scenarioProjectionLabel">Projeksiyon</span>
+        <span class="value blue" id="scenarioProjected">₺0</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button data-tab="home" class="active"><span class="icon">🏠</span><span>Ana Sayfa</span></button>
+  <button data-tab="expenses"><span class="icon">📋</span><span>Harcamalar</span></button>
+  <button data-tab="chart"><span class="icon">📈</span><span>Grafik</span></button>
+  <button data-tab="scenario"><span class="icon">🎚️</span><span>Senaryo</span></button>
+</nav>
+
+<div id="addExpenseModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <button id="cancelExpenseBtn">İptal</button>
+      <h2>Harcama Ekle</h2>
+      <button id="saveExpenseBtn">Kaydet</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Tutar</label>
+        <input id="expenseAmount" type="text" inputmode="decimal" placeholder="0">
+      </div>
+      <div class="field">
+        <label>Not (isteğe bağlı)</label>
+        <input id="expenseNote" type="text" placeholder="Not">
+      </div>
+      <div class="field">
+        <label>Tarih</label>
+        <input id="expenseDate" type="date">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Kalıcı Depolama (localStorage) ----------
+  const STORAGE_KEYS = {
+    income: "financeTracker.income",
+    debt: "financeTracker.debt",
+    expenses: "financeTracker.expenses"
+  };
+
+  function loadNumber(key) {
+    const raw = localStorage.getItem(key);
+    const value = raw !== null ? parseFloat(raw) : 0;
+    return isNaN(value) ? 0 : value;
+  }
+
+  function loadExpenses() {
+    const raw = localStorage.getItem(STORAGE_KEYS.expenses);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // ---------- Durum (State) ----------
+  const state = {
+    income: loadNumber(STORAGE_KEYS.income),
+    debt: loadNumber(STORAGE_KEYS.debt),
+    expenses: loadExpenses(), // { id, amount, note, date(YYYY-MM-DD) }
+    simulatedDailySpending: 0,
+    simulatedDayCount: 30
+  };
+
+  function persistIncome() { localStorage.setItem(STORAGE_KEYS.income, String(state.income)); }
+  function persistDebt() { localStorage.setItem(STORAGE_KEYS.debt, String(state.debt)); }
+  function persistExpenses() { localStorage.setItem(STORAGE_KEYS.expenses, JSON.stringify(state.expenses)); }
+
+  // ---------- Biçimlendirme ----------
+  const currencyFormatter = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 2 });
+  function currencyTR(value) { return currencyFormatter.format(value || 0); }
+
+  const dateFormatter = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", year: "numeric" });
+  function formattedDateTR(isoDate) { return dateFormatter.format(new Date(isoDate + "T00:00:00")); }
+
+  function todayISO() {
+    const d = new Date();
+    const tz = d.getTimezoneOffset() * 60000;
+    return new Date(d - tz).toISOString().slice(0, 10);
+  }
+
+  function parseDecimal(text) {
+    if (typeof text !== "string") return NaN;
+    return parseFloat(text.trim().replace(",", "."));
+  }
+
+  // ---------- Hesaplamalar (ViewModel mantığı) ----------
+  function totalExpenses() {
+    return state.expenses.reduce((sum, e) => sum + e.amount, 0);
+  }
+
+  function remainingBalance() {
+    return state.income - state.debt - totalExpenses();
+  }
+
+  function projectedBalance() {
+    return remainingBalance() - state.simulatedDailySpending * state.simulatedDayCount;
+  }
+
+  function balanceHistory() {
+    const sorted = [...state.expenses].sort((a, b) => a.date.localeCompare(b.date));
+    const startBalance = state.income - state.debt;
+    if (sorted.length === 0) {
+      return [{ date: todayISO(), balance: startBalance }];
+    }
+    const points = [];
+    const firstDate = new Date(sorted[0].date + "T00:00:00");
+    firstDate.setDate(firstDate.getDate() - 1);
+    points.push({ date: firstDate.toISOString().slice(0, 10), balance: startBalance });
+    let running = startBalance;
+    for (const e of sorted) {
+      running -= e.amount;
+      points.push({ date: e.date, balance: running });
+    }
+    return points;
+  }
+
+  // ---------- Hata mesajı (toast) ----------
+  let toastTimer = null;
+  function showError(message) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.classList.remove("hidden");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.add("hidden"), 2600);
+  }
+
+  // ---------- Aksiyonlar ----------
+  function setIncome(value) {
+    if (value < 0) { showError("Gelir negatif olamaz."); return false; }
+    state.income = value;
+    persistIncome();
+    return true;
+  }
+
+  function setDebt(value) {
+    if (value < 0) { showError("Borç negatif olamaz."); return false; }
+    state.debt = value;
+    persistDebt();
+    return true;
+  }
+
+  function addExpense(amount, note, date) {
+    if (!(amount > 0)) {
+      showError("Harcama tutarı sıfırdan büyük olmalıdır.");
+      return false;
+    }
+    state.expenses.push({
+      id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())),
+      amount,
+      note: note || "",
+      date: date || todayISO()
+    });
+    persistExpenses();
+    return true;
+  }
+
+  function deleteExpense(id) {
+    state.expenses = state.expenses.filter((e) => e.id !== id);
+    persistExpenses();
+  }
+
+  function setSimulatedDailySpending(value) {
+    if (value < 0) { showError("Günlük harcama negatif olamaz."); return; }
+    state.simulatedDailySpending = value;
+  }
+
+  // ---------- Sekme (Tab) Geçişi ----------
+  const tabTitles = { home: "Finans Takibi", expenses: "Harcamalar", chart: "Bakiye Grafiği", scenario: "Senaryo Simülatörü" };
+
+  function switchTab(tab) {
+    document.querySelectorAll(".tab").forEach((el) => el.classList.remove("active"));
+    document.getElementById("tab-" + tab).classList.add("active");
+    document.querySelectorAll("nav.tabbar button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.tab === tab);
+    });
+    document.getElementById("pageTitle").textContent = tabTitles[tab];
+    if (tab === "chart") renderChart();
+  }
+
+  document.querySelectorAll("nav.tabbar button").forEach((btn) => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
+
+  // ---------- Ana Sayfa Render ----------
+  const incomeInput = document.getElementById("incomeInput");
+  const debtInput = document.getElementById("debtInput");
+
+  function renderHome() {
+    document.getElementById("summaryIncome").textContent = currencyTR(state.income);
+    document.getElementById("summaryDebt").textContent = currencyTR(state.debt);
+    document.getElementById("summaryExpenses").textContent = currencyTR(totalExpenses());
+    const remaining = remainingBalance();
+    const remainingEl = document.getElementById("summaryRemaining");
+    remainingEl.textContent = currencyTR(remaining);
+    remainingEl.className = "value bold " + (remaining >= 0 ? "blue" : "red");
+  }
+
+  incomeInput.addEventListener("input", () => {
+    const raw = incomeInput.value;
+    if (raw.trim() === "") { setIncome(0); renderAll(); return; }
+    const value = parseDecimal(raw);
+    if (!isNaN(value) && setIncome(value)) renderAll();
+  });
+
+  debtInput.addEventListener("input", () => {
+    const raw = debtInput.value;
+    if (raw.trim() === "") { setDebt(0); renderAll(); return; }
+    const value = parseDecimal(raw);
+    if (!isNaN(value) && setDebt(value)) renderAll();
+  });
+
+  // ---------- Harcama Listesi Render ----------
+  function renderExpenseList() {
+    const sorted = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date));
+    const card = document.getElementById("expenseListCard");
+    document.getElementById("expenseCountLabel").textContent = "Toplam " + sorted.length + " harcama";
+
+    if (sorted.length === 0) {
+      card.innerHTML = '<div class="empty-state"><div class="icon">🗂️</div>' +
+        '<div>Henüz harcama yok</div>' +
+        '<div class="desc">Ana sayfadan yeni bir harcama ekleyebilirsiniz.</div></div>';
+      return;
+    }
+
+    card.innerHTML = "";
+    sorted.forEach((expense) => {
+      const row = document.createElement("div");
+      row.className = "expense-row";
+      row.innerHTML =
+        '<div>' +
+          '<div class="expense-note"></div>' +
+          '<div class="expense-date"></div>' +
+        '</div>' +
+        '<div style="display:flex; align-items:center;">' +
+          '<span class="expense-amount"></span>' +
+          '<button class="delete-btn" title="Sil">✕</button>' +
+        '</div>';
+      row.querySelector(".expense-note").textContent = expense.note || "Harcama";
+      row.querySelector(".expense-date").textContent = formattedDateTR(expense.date);
+      row.querySelector(".expense-amount").textContent = "-" + currencyTR(expense.amount);
+      row.querySelector(".delete-btn").addEventListener("click", () => {
+        deleteExpense(expense.id);
+        renderAll();
+      });
+      card.appendChild(row);
+    });
+  }
+
+  // ---------- Grafik Render (özel SVG çizgi grafiği) ----------
+  function renderChart() {
+    const wrap = document.getElementById("chartWrap");
+    const points = balanceHistory();
+
+    if (points.length < 2) {
+      wrap.innerHTML = '<div class="empty-state"><div class="icon">📈</div>' +
+        '<div>Grafik için yeterli veri yok</div>' +
+        '<div class="desc">Harcama ekledikçe bakiye değişim grafiği burada görünecek.</div></div>';
+      return;
+    }
+
+    const width = 320, height = 220, padding = { top: 16, right: 16, bottom: 26, left: 54 };
+    const innerW = width - padding.left - padding.right;
+    const innerH = height - padding.top - padding.bottom;
+
+    const dates = points.map((p) => new Date(p.date + "T00:00:00").getTime());
+    const balances = points.map((p) => p.balance);
+    const minDate = Math.min(...dates), maxDate = Math.max(...dates);
+    let minBal = Math.min(...balances), maxBal = Math.max(...balances);
+    if (minBal === maxBal) { minBal -= 1; maxBal += 1; }
+    const balRange = maxBal - minBal;
+    const dateRange = maxDate - minDate || 1;
+
+    function xFor(t) { return padding.left + ((t - minDate) / dateRange) * innerW; }
+    function yFor(b) { return padding.top + innerH - ((b - minBal) / balRange) * innerH; }
+
+    const pathD = points.map((p, i) => {
+      const x = xFor(new Date(p.date + "T00:00:00").getTime());
+      const y = yFor(p.balance);
+      return (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1);
+    }).join(" ");
+
+    const circles = points.map((p) => {
+      const x = xFor(new Date(p.date + "T00:00:00").getTime());
+      const y = yFor(p.balance);
+      return '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3" fill="#007aff"></circle>';
+    }).join("");
+
+    const zeroY = (minBal <= 0 && maxBal >= 0) ? yFor(0) : null;
+    const zeroLine = zeroY !== null
+      ? '<line x1="' + padding.left + '" y1="' + zeroY.toFixed(1) + '" x2="' + (width - padding.right) + '" y2="' + zeroY.toFixed(1) + '" stroke="#ff3b30" stroke-dasharray="3,3" stroke-width="1"></line>'
+      : "";
+
+    const yTicks = [minBal, (minBal + maxBal) / 2, maxBal];
+    const yLabels = yTicks.map((v) => {
+      const y = yFor(v);
+      return '<text x="4" y="' + (y + 3).toFixed(1) + '" font-size="9" fill="var(--muted)">' + Math.round(v) + '</text>';
+    }).join("");
+
+    const firstLabel = formattedDateTR(points[0].date);
+    const lastLabel = formattedDateTR(points[points.length - 1].date);
+
+    wrap.innerHTML =
+      '<svg viewBox="0 0 ' + width + ' ' + height + '" style="width:100%; height:auto; display:block;">' +
+        yLabels + zeroLine +
+        '<path d="' + pathD + '" fill="none" stroke="#007aff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>' +
+        circles +
+      '</svg>' +
+      '<div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); padding:0 8px;">' +
+        '<span>' + firstLabel + '</span><span>' + lastLabel + '</span>' +
+      '</div>';
+  }
+
+  // ---------- Senaryo Render ----------
+  const dailySpendingSlider = document.getElementById("dailySpendingSlider");
+
+  function renderScenario() {
+    document.getElementById("dailySpendingLabel").textContent = "Günlük Harcama: " + currencyTR(state.simulatedDailySpending);
+    dailySpendingSlider.value = state.simulatedDailySpending;
+    document.getElementById("dayCountLabel").textContent = "Gün Sayısı: " + state.simulatedDayCount;
+    document.getElementById("scenarioCurrent").textContent = currencyTR(remainingBalance());
+    document.getElementById("scenarioProjectionLabel").textContent = "Projeksiyon (" + state.simulatedDayCount + " gün sonra)";
+    const projected = projectedBalance();
+    const projEl = document.getElementById("scenarioProjected");
+    projEl.textContent = currencyTR(projected);
+    projEl.className = "value bold " + (projected >= 0 ? "blue" : "red");
+  }
+
+  dailySpendingSlider.addEventListener("input", () => {
+    setSimulatedDailySpending(parseFloat(dailySpendingSlider.value));
+    renderScenario();
+  });
+
+  document.getElementById("dayCountMinus").addEventListener("click", () => {
+    state.simulatedDayCount = Math.max(1, state.simulatedDayCount - 1);
+    renderScenario();
+  });
+  document.getElementById("dayCountPlus").addEventListener("click", () => {
+    state.simulatedDayCount = Math.min(365, state.simulatedDayCount + 1);
+    renderScenario();
+  });
+
+  // ---------- Harcama Ekle Modalı ----------
+  const modal = document.getElementById("addExpenseModal");
+  const expenseAmountInput = document.getElementById("expenseAmount");
+  const expenseNoteInput = document.getElementById("expenseNote");
+  const expenseDateInput = document.getElementById("expenseDate");
+
+  function openModal() {
+    expenseAmountInput.value = "";
+    expenseNoteInput.value = "";
+    expenseDateInput.value = todayISO();
+    modal.classList.remove("hidden");
+  }
+  function closeModal() { modal.classList.add("hidden"); }
+
+  document.getElementById("openAddExpenseBtn").addEventListener("click", openModal);
+  document.getElementById("cancelExpenseBtn").addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+  document.getElementById("saveExpenseBtn").addEventListener("click", () => {
+    const amount = parseDecimal(expenseAmountInput.value);
+    if (isNaN(amount) || amount <= 0) {
+      showError("Lütfen geçerli, sıfırdan büyük bir tutar girin.");
+      return;
+    }
+    const date = expenseDateInput.value || todayISO();
+    if (addExpense(amount, expenseNoteInput.value, date)) {
+      closeModal();
+      renderAll();
+    }
+  });
+
+  // ---------- Tüm Ekranı Yeniden Çiz ----------
+  function renderAll() {
+    renderHome();
+    renderExpenseList();
+    renderScenario();
+    if (document.getElementById("tab-chart").classList.contains("active")) renderChart();
+  }
+
+  // ---------- Başlangıç ----------
+  incomeInput.value = state.income === 0 ? "" : String(state.income);
+  debtInput.value = state.debt === 0 ? "" : String(state.debt);
+  renderAll();
+})();
+</script>
+
+</body>
+</html>
