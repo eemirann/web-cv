@@ -114,6 +114,7 @@
     margin-bottom: 18px;
   }
   button.primary:active { opacity: .8; }
+  button.primary.secondary { background: var(--green); }
 
   .empty-state {
     text-align: center;
@@ -134,6 +135,7 @@
   .expense-note { font-size: 16px; }
   .expense-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .expense-amount { color: var(--red); font-weight: 600; white-space: nowrap; }
+  .payment-amount { color: var(--green); font-weight: 600; white-space: nowrap; }
   .delete-btn {
     border: none;
     background: none;
@@ -292,6 +294,26 @@
       </div>
     </div>
 
+    <div class="card-title" id="debtPlanTitle">Borç Kapatma Planı</div>
+    <div class="card" id="debtPlanCard">
+      <div class="row">
+        <span class="label" id="debtDaysLabel">Gün Sayısı: 30</span>
+        <div class="stepper">
+          <button id="debtDaysMinus">−</button>
+          <button id="debtDaysPlus">+</button>
+        </div>
+      </div>
+      <div class="row bold">
+        <span class="label">Günlük Ödeme Tutarı</span>
+        <span class="value orange" id="dailyPayoffAmount">₺0</span>
+      </div>
+    </div>
+
+    <button class="primary secondary" id="openAddPaymentBtn">+ Para Ekle</button>
+
+    <div class="card-title">Borç Ödemeleri</div>
+    <div class="card" id="paymentListCard"></div>
+
     <button class="primary" id="openAddExpenseBtn">+ Harcama Ekle</button>
   </section>
 
@@ -369,6 +391,30 @@
   </div>
 </div>
 
+<div id="addPaymentModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <button id="cancelPaymentBtn">İptal</button>
+      <h2>Para Ekle</h2>
+      <button id="savePaymentBtn">Kaydet</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Tutar</label>
+        <input id="paymentAmount" type="text" inputmode="decimal" placeholder="0">
+      </div>
+      <div class="field">
+        <label>Not (isteğe bağlı)</label>
+        <input id="paymentNote" type="text" placeholder="Not">
+      </div>
+      <div class="field">
+        <label>Tarih</label>
+        <input id="paymentDate" type="date">
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script>
@@ -379,7 +425,9 @@
   const STORAGE_KEYS = {
     income: "financeTracker.income",
     debt: "financeTracker.debt",
-    expenses: "financeTracker.expenses"
+    expenses: "financeTracker.expenses",
+    debtPayments: "financeTracker.debtPayments",
+    debtPayoffDays: "financeTracker.debtPayoffDays"
   };
 
   function loadNumber(key) {
@@ -388,8 +436,15 @@
     return isNaN(value) ? 0 : value;
   }
 
-  function loadExpenses() {
-    const raw = localStorage.getItem(STORAGE_KEYS.expenses);
+  function loadNumberWithDefault(key, fallback) {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    const value = parseFloat(raw);
+    return isNaN(value) ? fallback : value;
+  }
+
+  function loadRecords(key) {
+    const raw = localStorage.getItem(key);
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw);
@@ -403,7 +458,9 @@
   const state = {
     income: loadNumber(STORAGE_KEYS.income),
     debt: loadNumber(STORAGE_KEYS.debt),
-    expenses: loadExpenses(), // { id, amount, note, date(YYYY-MM-DD) }
+    expenses: loadRecords(STORAGE_KEYS.expenses), // { id, amount, note, date(YYYY-MM-DD) }
+    debtPayments: loadRecords(STORAGE_KEYS.debtPayments), // { id, amount, note, date(YYYY-MM-DD) }
+    debtPayoffDays: Math.round(loadNumberWithDefault(STORAGE_KEYS.debtPayoffDays, 30)),
     simulatedDailySpending: 0,
     simulatedDayCount: 30
   };
@@ -411,6 +468,8 @@
   function persistIncome() { localStorage.setItem(STORAGE_KEYS.income, String(state.income)); }
   function persistDebt() { localStorage.setItem(STORAGE_KEYS.debt, String(state.debt)); }
   function persistExpenses() { localStorage.setItem(STORAGE_KEYS.expenses, JSON.stringify(state.expenses)); }
+  function persistDebtPayments() { localStorage.setItem(STORAGE_KEYS.debtPayments, JSON.stringify(state.debtPayments)); }
+  function persistDebtPayoffDays() { localStorage.setItem(STORAGE_KEYS.debtPayoffDays, String(state.debtPayoffDays)); }
 
   // ---------- Biçimlendirme ----------
   const currencyFormatter = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 2 });
@@ -443,20 +502,36 @@
     return remainingBalance() - state.simulatedDailySpending * state.simulatedDayCount;
   }
 
+  function totalDebtPayments() {
+    return state.debtPayments.reduce((sum, p) => sum + p.amount, 0);
+  }
+
+  // Borç kapatma planı: kalan borcu seçilen gün sayısına eşit böler.
+  function dailyPayoffAmount() {
+    if (state.debt <= 0 || state.debtPayoffDays <= 0) return 0;
+    return state.debt / state.debtPayoffDays;
+  }
+
   function balanceHistory() {
-    const sorted = [...state.expenses].sort((a, b) => a.date.localeCompare(b.date));
-    const startBalance = state.income - state.debt;
-    if (sorted.length === 0) {
+    // Borcun başlangıç değeri: mevcut borç + şimdiye kadar yapılan ödemeler.
+    const originalDebt = state.debt + totalDebtPayments();
+    const events = [
+      ...state.expenses.map((e) => ({ date: e.date, delta: -e.amount })),
+      ...state.debtPayments.map((p) => ({ date: p.date, delta: p.amount }))
+    ].sort((a, b) => a.date.localeCompare(b.date));
+
+    const startBalance = state.income - originalDebt;
+    if (events.length === 0) {
       return [{ date: todayISO(), balance: startBalance }];
     }
     const points = [];
-    const firstDate = new Date(sorted[0].date + "T00:00:00");
+    const firstDate = new Date(events[0].date + "T00:00:00");
     firstDate.setDate(firstDate.getDate() - 1);
     points.push({ date: firstDate.toISOString().slice(0, 10), balance: startBalance });
     let running = startBalance;
-    for (const e of sorted) {
-      running -= e.amount;
-      points.push({ date: e.date, balance: running });
+    for (const ev of events) {
+      running += ev.delta;
+      points.push({ date: ev.date, balance: running });
     }
     return points;
   }
@@ -506,6 +581,42 @@
     persistExpenses();
   }
 
+  // Eklenen para doğrudan kalan borçtan düşülür.
+  function addDebtPayment(amount, note, date) {
+    if (!(amount > 0)) {
+      showError("Ödeme tutarı sıfırdan büyük olmalıdır.");
+      return false;
+    }
+    if (amount > state.debt) {
+      showError("Ödeme tutarı kalan borçtan (" + currencyTR(state.debt) + ") fazla olamaz.");
+      return false;
+    }
+    state.debt -= amount;
+    persistDebt();
+    state.debtPayments.push({
+      id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())),
+      amount,
+      note: note || "",
+      date: date || todayISO()
+    });
+    persistDebtPayments();
+    return true;
+  }
+
+  function deleteDebtPayment(id) {
+    const payment = state.debtPayments.find((p) => p.id === id);
+    if (!payment) return;
+    state.debt += payment.amount;
+    state.debtPayments = state.debtPayments.filter((p) => p.id !== id);
+    persistDebt();
+    persistDebtPayments();
+  }
+
+  function setDebtPayoffDays(value) {
+    state.debtPayoffDays = Math.min(3650, Math.max(1, Math.round(value)));
+    persistDebtPayoffDays();
+  }
+
   function setSimulatedDailySpending(value) {
     if (value < 0) { showError("Günlük harcama negatif olamaz."); return; }
     state.simulatedDailySpending = value;
@@ -540,7 +651,31 @@
     const remainingEl = document.getElementById("summaryRemaining");
     remainingEl.textContent = currencyTR(remaining);
     remainingEl.className = "value bold " + (remaining >= 0 ? "blue" : "red");
+
+    // Para ekleme/silme borcu dışarıdan değiştirebilir; kullanıcı o an yazmıyorsa senkronize et.
+    if (document.activeElement !== debtInput) {
+      debtInput.value = state.debt === 0 ? "" : String(state.debt);
+    }
+
+    document.getElementById("debtDaysLabel").textContent = "Gün Sayısı: " + state.debtPayoffDays;
+    const payoffEl = document.getElementById("dailyPayoffAmount");
+    if (state.debt <= 0) {
+      payoffEl.textContent = "Borcun yok 🎉";
+      payoffEl.className = "value bold green";
+    } else {
+      payoffEl.textContent = currencyTR(dailyPayoffAmount());
+      payoffEl.className = "value bold orange";
+    }
   }
+
+  document.getElementById("debtDaysMinus").addEventListener("click", () => {
+    setDebtPayoffDays(state.debtPayoffDays - 1);
+    renderHome();
+  });
+  document.getElementById("debtDaysPlus").addEventListener("click", () => {
+    setDebtPayoffDays(state.debtPayoffDays + 1);
+    renderHome();
+  });
 
   incomeInput.addEventListener("input", () => {
     const raw = incomeInput.value;
@@ -587,6 +722,42 @@
       row.querySelector(".expense-amount").textContent = "-" + currencyTR(expense.amount);
       row.querySelector(".delete-btn").addEventListener("click", () => {
         deleteExpense(expense.id);
+        renderAll();
+      });
+      card.appendChild(row);
+    });
+  }
+
+  // ---------- Borç Ödemeleri Listesi Render ----------
+  function renderPaymentList() {
+    const sorted = [...state.debtPayments].sort((a, b) => b.date.localeCompare(a.date));
+    const card = document.getElementById("paymentListCard");
+
+    if (sorted.length === 0) {
+      card.innerHTML = '<div class="empty-state"><div class="icon">💳</div>' +
+        '<div>Henüz ödeme yok</div>' +
+        '<div class="desc">"+ Para Ekle" ile borcuna ödeme ekleyebilirsin.</div></div>';
+      return;
+    }
+
+    card.innerHTML = "";
+    sorted.forEach((payment) => {
+      const row = document.createElement("div");
+      row.className = "expense-row";
+      row.innerHTML =
+        '<div>' +
+          '<div class="expense-note"></div>' +
+          '<div class="expense-date"></div>' +
+        '</div>' +
+        '<div style="display:flex; align-items:center;">' +
+          '<span class="payment-amount"></span>' +
+          '<button class="delete-btn" title="Sil">✕</button>' +
+        '</div>';
+      row.querySelector(".expense-note").textContent = payment.note || "Borç Ödemesi";
+      row.querySelector(".expense-date").textContent = formattedDateTR(payment.date);
+      row.querySelector(".payment-amount").textContent = "+" + currencyTR(payment.amount);
+      row.querySelector(".delete-btn").addEventListener("click", () => {
+        deleteDebtPayment(payment.id);
         renderAll();
       });
       card.appendChild(row);
@@ -717,10 +888,42 @@
     }
   });
 
+  // ---------- Para Ekle Modalı ----------
+  const paymentModal = document.getElementById("addPaymentModal");
+  const paymentAmountInput = document.getElementById("paymentAmount");
+  const paymentNoteInput = document.getElementById("paymentNote");
+  const paymentDateInput = document.getElementById("paymentDate");
+
+  function openPaymentModal() {
+    paymentAmountInput.value = "";
+    paymentNoteInput.value = "";
+    paymentDateInput.value = todayISO();
+    paymentModal.classList.remove("hidden");
+  }
+  function closePaymentModal() { paymentModal.classList.add("hidden"); }
+
+  document.getElementById("openAddPaymentBtn").addEventListener("click", openPaymentModal);
+  document.getElementById("cancelPaymentBtn").addEventListener("click", closePaymentModal);
+  paymentModal.addEventListener("click", (e) => { if (e.target === paymentModal) closePaymentModal(); });
+
+  document.getElementById("savePaymentBtn").addEventListener("click", () => {
+    const amount = parseDecimal(paymentAmountInput.value);
+    if (isNaN(amount) || amount <= 0) {
+      showError("Lütfen geçerli, sıfırdan büyük bir tutar girin.");
+      return;
+    }
+    const date = paymentDateInput.value || todayISO();
+    if (addDebtPayment(amount, paymentNoteInput.value, date)) {
+      closePaymentModal();
+      renderAll();
+    }
+  });
+
   // ---------- Tüm Ekranı Yeniden Çiz ----------
   function renderAll() {
     renderHome();
     renderExpenseList();
+    renderPaymentList();
     renderScenario();
     if (document.getElementById("tab-chart").classList.contains("active")) renderChart();
   }
