@@ -1,0 +1,69 @@
+# Prompt Stüdyosu
+
+Kısa bir kullanıcı girdisini (`"utangaç sevgili"`) Claude ile detaylı bir görsel
+prompt'una çevirir, ardından bir görsel üretim sağlayıcısına gönderip sonucu gösterir.
+
+## Neden sunucu var?
+
+Taslaktaki `fetch("claude-api")` çağrısı tarayıcıdan yapılamaz: API anahtarı
+istemciye düşer ve herkes tarafından okunabilir. Anahtarlar bu küçük Express
+sunucusunda kalır, tarayıcı yalnızca kendi `/api/*` uçlarını çağırır.
+
+## Kurulum
+
+```bash
+npm install
+cp .env.example .env   # ANTHROPIC_API_KEY değerini girin
+npm start              # http://localhost:3000
+```
+
+**Anthropic kredisi yoksa / API anahtarı olmadan denemek için:** `.env` içinde
+`PROMPT_PROVIDER=mock` yapın — Claude'a hiç istek gitmez, sabit bir kalıba göre
+prompt üretilir. `IMAGE_PROVIDER=mock` ile birlikte kullanınca hiçbir anahtar
+olmadan tüm akışı test edebilirsiniz. Gerçek Claude'a geçmek için satırı silin
+ya da `PROMPT_PROVIDER=claude` yapın.
+
+## Uçlar
+
+| Uç | Girdi | Çıktı |
+| --- | --- | --- |
+| `POST /api/prompt` | `{ "input": "utangaç sevgili" }` | `{ "prompt": "shy young woman, …" }` |
+| `POST /api/image` | `{ "prompt": "shy young woman, …" }` | Ham görsel baytları (`image/png` vb.) |
+| `POST /api/generate` | `{ "input": "…" }` | `{ "prompt": "…", "dataUrl": "…" }` |
+
+## Görsel üretimi
+
+**Anthropic API görsel üretmez** — Claude yalnızca prompt metnini yazar. Görsel
+için ayrı bir sağlayıcı gerekir; `IMAGE_PROVIDER` ile seçilir:
+
+| Değer | Gereken anahtar | Not |
+| --- | --- | --- |
+| `mock` (varsayılan) | — | Yer tutucu SVG döner; anahtarsız denemek için |
+| `huggingface` | `HF_API_KEY` | Varsayılan model `stabilityai/stable-diffusion-2`; `HF_MODEL` ile değiştirilir |
+| `openai` | `OPENAI_API_KEY` | `gpt-image-1` |
+| `stability` | `STABILITY_API_KEY` | Stable Image Core |
+
+Hugging Face tarafında model soğuksa ilk istek 503 döner (`estimated_time`
+saniye sonra hazır olur); adaptör bunu anlaşılır bir mesaja çeviriyor, birkaç
+saniye sonra tekrar deneyin. Uç nokta `HF_API_BASE` ile değiştirilebilir; varsayılan
+`https://api-inference.huggingface.co/models`. Model bu uçta artık sunulmuyorsa
+404 alırsınız — o durumda `HF_API_BASE=https://router.huggingface.co/hf-inference/models`
+deneyin veya `HF_MODEL` değerini güncel bir modelle değiştirin.
+
+> Anahtarlar yalnızca `.env` içinde durur (`.gitignore`'da). Anahtarı kod içine
+> yazmayın ve sohbet/issue gibi yerlere yapıştırmayın; yapıştırdıysanız iptal edip
+> yenisini alın.
+
+Yeni sağlayıcı eklemek için `lib/image.js` içindeki `PROVIDERS` nesnesine
+`async (prompt) => ({ buffer, contentType })` imzalı bir fonksiyon ekleyin; başka
+yeri değiştirmeniz gerekmez.
+
+## Model ayarları
+
+`lib/prompt.js` içinde `claude-opus-5`, düşük efor (`effort: "low"`) ile
+çağrılıyor — görev kısa ve kalıplı olduğu için yeterli. `max_tokens` bilinçli
+olarak geniş bırakıldı: Opus 5'te düşünme ve yanıt metni aynı bütçeyi paylaşır,
+dar bir limit yanıtı ortasından keser.
+
+Sistem talimatı ayrıca içerik sınırlarını da içeriyor: özneler daima yetişkin,
+müstehcen olmayan tarifler, gerçek/tanınabilir kişi yok.

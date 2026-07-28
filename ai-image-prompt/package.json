@@ -1,0 +1,14 @@
+{
+  "name": "ai-image-prompt",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Kullanici girdisini Claude ile detayli goersel prompt'una cevirip goersel ureten mini servis",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "express": "^5.1.0"
+  }
+}
