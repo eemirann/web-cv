@@ -17,6 +17,12 @@ cp .env.example .env   # ANTHROPIC_API_KEY değerini girin
 npm start              # http://localhost:3000
 ```
 
+**Anthropic kredisi yoksa / API anahtarı olmadan denemek için:** `.env` içinde
+`PROMPT_PROVIDER=mock` yapın — Claude'a hiç istek gitmez, sabit bir kalıba göre
+prompt üretilir. `IMAGE_PROVIDER=mock` ile birlikte kullanınca hiçbir anahtar
+olmadan tüm akışı test edebilirsiniz. Gerçek Claude'a geçmek için satırı silin
+ya da `PROMPT_PROVIDER=claude` yapın.
+
 ## Uçlar
 
 | Uç | Girdi | Çıktı |

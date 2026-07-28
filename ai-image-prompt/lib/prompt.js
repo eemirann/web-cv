@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic(); // ANTHROPIC_API_KEY ortamdan okunur
+let client; // yalnız gerçekten gerektiğinde kurulur (mock modda Anthropic'e hiç dokunulmaz)
 
 /**
  * Prompt mühendisi sistem talimatı.
@@ -29,10 +29,18 @@ beautiful young woman, mid twenties, soft natural makeup, long dark wavy hair, g
 
 /**
  * Kullanıcı girdisini detaylı bir görsel prompt'una çevirir.
+ * PROMPT_PROVIDER=mock ise Claude'a hiç istek atmaz — kredi/anahtar gerekmez,
+ * yalnızca akışı test etmek için sabit bir kalıba göre prompt üretir.
  * @param {string} input örn. "utangaç sevgili"
  * @returns {Promise<string>}
  */
 export async function generatePrompt(input) {
+  if ((process.env.PROMPT_PROVIDER ?? "claude") === "mock") {
+    return mockPrompt(input);
+  }
+
+  client ??= new Anthropic(); // ANTHROPIC_API_KEY ortamdan okunur
+
   const response = await client.messages.create({
     model: "claude-opus-5",
     max_tokens: 2000, // düşünme + metin aynı bütçeyi paylaşır, bol bırakıyoruz
@@ -53,4 +61,15 @@ export async function generatePrompt(input) {
     .map((block) => block.text)
     .join("")
     .trim();
+}
+
+/** Claude olmadan çalışan basit yer tutucu — akışı test etmek için. */
+function mockPrompt(input) {
+  return [
+    `${input}, portrait of an adult woman, mid twenties`,
+    "soft natural makeup, gentle expression, casual cozy outfit",
+    "soft window lighting, cinematic, shallow depth of field, 85mm f/1.8",
+    "realistic, 4k, detailed face, natural pose",
+    "[PROMPT_PROVIDER=mock — Claude çağrılmadı]",
+  ].join(", ");
 }
