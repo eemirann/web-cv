@@ -22,7 +22,7 @@ npm start              # http://localhost:3000
 | Uç | Girdi | Çıktı |
 | --- | --- | --- |
 | `POST /api/prompt` | `{ "input": "utangaç sevgili" }` | `{ "prompt": "shy young woman, …" }` |
-| `POST /api/image` | `{ "prompt": "shy young woman, …" }` | `{ "dataUrl": "data:image/png;base64,…" }` |
+| `POST /api/image` | `{ "prompt": "shy young woman, …" }` | Ham görsel baytları (`image/png` vb.) |
 | `POST /api/generate` | `{ "input": "…" }` | `{ "prompt": "…", "dataUrl": "…" }` |
 
 ## Görsel üretimi
@@ -33,22 +33,24 @@ için ayrı bir sağlayıcı gerekir; `IMAGE_PROVIDER` ile seçilir:
 | Değer | Gereken anahtar | Not |
 | --- | --- | --- |
 | `mock` (varsayılan) | — | Yer tutucu SVG döner; anahtarsız denemek için |
-| `huggingface` | `HF_API_KEY` | Varsayılan model `black-forest-labs/FLUX.1-schnell`; `HF_MODEL` ile değiştirilir |
+| `huggingface` | `HF_API_KEY` | Varsayılan model `stabilityai/stable-diffusion-2`; `HF_MODEL` ile değiştirilir |
 | `openai` | `OPENAI_API_KEY` | `gpt-image-1` |
 | `stability` | `STABILITY_API_KEY` | Stable Image Core |
 
 Hugging Face tarafında model soğuksa ilk istek 503 döner (`estimated_time`
 saniye sonra hazır olur); adaptör bunu anlaşılır bir mesaja çeviriyor, birkaç
-saniye sonra tekrar deneyin. Uç nokta `HF_API_BASE` ile değiştirilebilir —
-eski `https://api-inference.huggingface.co/models` adresi de aynı gövdeyi kabul eder.
+saniye sonra tekrar deneyin. Uç nokta `HF_API_BASE` ile değiştirilebilir; varsayılan
+`https://api-inference.huggingface.co/models`. Model bu uçta artık sunulmuyorsa
+404 alırsınız — o durumda `HF_API_BASE=https://router.huggingface.co/hf-inference/models`
+deneyin veya `HF_MODEL` değerini güncel bir modelle değiştirin.
 
 > Anahtarlar yalnızca `.env` içinde durur (`.gitignore`'da). Anahtarı kod içine
 > yazmayın ve sohbet/issue gibi yerlere yapıştırmayın; yapıştırdıysanız iptal edip
 > yenisini alın.
 
 Yeni sağlayıcı eklemek için `lib/image.js` içindeki `PROVIDERS` nesnesine
-`async (prompt) => ({ dataUrl })` imzalı bir fonksiyon ekleyin; başka yeri
-değiştirmeniz gerekmez.
+`async (prompt) => ({ buffer, contentType })` imzalı bir fonksiyon ekleyin; başka
+yeri değiştirmeniz gerekmez.
 
 ## Model ayarları
 

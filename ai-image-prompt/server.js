@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { generatePrompt } from "./lib/prompt.js";
-import { generateImage } from "./lib/image.js";
+import { generateImage, toDataUrl } from "./lib/image.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -24,12 +24,14 @@ app.post("/api/prompt", async (req, res, next) => {
 });
 
 // 2) Prompt → görsel (ayrı sağlayıcı; Anthropic görsel üretmez)
+//    Ham bayt döner; istemci blob() + URL.createObjectURL ile kullanır.
 app.post("/api/image", async (req, res, next) => {
   try {
     const prompt = String(req.body?.prompt ?? "").trim();
     if (!prompt) return res.status(400).json({ error: "prompt alanı boş olamaz." });
 
-    res.json(await generateImage(prompt));
+    const { buffer, contentType } = await generateImage(prompt);
+    res.type(contentType).send(buffer);
   } catch (err) {
     next(err);
   }
@@ -42,8 +44,7 @@ app.post("/api/generate", async (req, res, next) => {
     if (!input) return res.status(400).json({ error: "input alanı boş olamaz." });
 
     const prompt = await generatePrompt(input);
-    const { dataUrl } = await generateImage(prompt);
-    res.json({ prompt, dataUrl });
+    res.json({ prompt, dataUrl: toDataUrl(await generateImage(prompt)) });
   } catch (err) {
     next(err);
   }

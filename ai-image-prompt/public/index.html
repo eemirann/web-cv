@@ -94,9 +94,12 @@
       document.getElementById("promptText").textContent = prompt;
       cards.prompt.hidden = false;
 
-      // 2) Prompt → görsel
-      const { dataUrl } = await post("/api/image", { prompt });
-      document.getElementById("image").src = dataUrl;
+      // 2) Prompt → görsel (ham bayt → blob URL)
+      const image = document.getElementById("image");
+      if (image.dataset.objectUrl) URL.revokeObjectURL(image.dataset.objectUrl);
+      const objectUrl = await fetchImage(prompt);
+      image.dataset.objectUrl = objectUrl;
+      image.src = objectUrl;
       cards.image.hidden = false;
     } catch (err) {
       document.getElementById("errorText").textContent = err.message;
@@ -106,6 +109,21 @@
       submit.textContent = "Üret";
     }
   });
+
+  async function fetchImage(prompt) {
+    const res = await fetch("/api/image", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    // Hata durumunda gövde JSON olur; blob'a çevirmeden önce kontrol et,
+    // yoksa bozuk bir görsel gösterip hata mesajını kaybederiz.
+    if (!res.ok || !(res.headers.get("content-type") ?? "").startsWith("image/")) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json.error ?? `Görsel üretilemedi (${res.status})`);
+    }
+    return URL.createObjectURL(await res.blob());
+  }
 
   async function post(url, body) {
     const res = await fetch(url, {

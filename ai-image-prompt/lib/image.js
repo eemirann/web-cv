@@ -3,11 +3,13 @@
  *
  * ÖNEMLİ: Anthropic API görsel üretmez — Claude yalnızca prompt'u yazar.
  * Görsel için ayrı bir sağlayıcı gerekir. IMAGE_PROVIDER ile seçilir:
- *   mock      → anahtar gerekmez, yer tutucu SVG döner (varsayılan)
- *   openai    → OPENAI_API_KEY
- *   stability → STABILITY_API_KEY
+ *   mock        → anahtar gerekmez, yer tutucu SVG döner (varsayılan)
+ *   huggingface → HF_API_KEY
+ *   openai      → OPENAI_API_KEY
+ *   stability   → STABILITY_API_KEY
  *
- * Hepsi tek bir sözleşme döner: { dataUrl: "data:image/...;base64,..." }
+ * Hepsi tek bir sözleşme döner: { buffer: Buffer, contentType: "image/..." }
+ * Base64 gerekiyorsa toDataUrl() kullanın.
  */
 
 const PROVIDERS = {
@@ -26,31 +28,12 @@ const PROVIDERS = {
          style="color:#ffffff99;font:13px sans-serif;line-height:1.5">${escapeXml(label)}…</div>
   </foreignObject>
 </svg>`;
-    return { dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` };
-  },
-
-  async openai(prompt) {
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${requireKey("OPENAI_API_KEY")}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1",
-        prompt,
-        size: "1024x1024",
-        n: 1,
-      }),
-    });
-    if (!res.ok) throw await providerError("openai", res);
-    const json = await res.json();
-    return { dataUrl: `data:image/png;base64,${json.data[0].b64_json}` };
+    return { buffer: Buffer.from(svg), contentType: "image/svg+xml" };
   },
 
   async huggingface(prompt) {
-    const model = process.env.HF_MODEL ?? "black-forest-labs/FLUX.1-schnell";
-    const base = process.env.HF_API_BASE ?? "https://router.huggingface.co/hf-inference/models";
+    const model = process.env.HF_MODEL ?? "stabilityai/stable-diffusion-2";
+    const base = process.env.HF_API_BASE ?? "https://api-inference.huggingface.co/models";
 
     const res = await fetch(`${base}/${model}`, {
       method: "POST",
@@ -70,13 +53,30 @@ const PROVIDERS = {
     }
     if (!res.ok) throw await providerError("huggingface", res);
 
-    const type = res.headers.get("content-type") ?? "";
-    if (!type.startsWith("image/")) {
-      throw await providerError("huggingface", res); // hata gövdesi JSON olarak gelmiş
-    }
+    // Hata durumunda HF 200 ile JSON da dönebilir — blob'a çevirmeden önce kontrol et
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) throw await providerError("huggingface", res);
 
-    const buffer = Buffer.from(await res.arrayBuffer());
-    return { dataUrl: `data:${type};base64,${buffer.toString("base64")}` };
+    return { buffer: Buffer.from(await res.arrayBuffer()), contentType };
+  },
+
+  async openai(prompt) {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${requireKey("OPENAI_API_KEY")}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1",
+        prompt,
+        size: "1024x1024",
+        n: 1,
+      }),
+    });
+    if (!res.ok) throw await providerError("openai", res);
+    const json = await res.json();
+    return { buffer: Buffer.from(json.data[0].b64_json, "base64"), contentType: "image/png" };
   },
 
   async stability(prompt) {
@@ -94,8 +94,8 @@ const PROVIDERS = {
       body: form,
     });
     if (!res.ok) throw await providerError("stability", res);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    return { dataUrl: `data:image/png;base64,${buffer.toString("base64")}` };
+
+    return { buffer: Buffer.from(await res.arrayBuffer()), contentType: "image/png" };
   },
 };
 
@@ -109,6 +109,10 @@ export async function generateImage(prompt) {
     );
   }
   return provider(prompt);
+}
+
+export function toDataUrl({ buffer, contentType }) {
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
 }
 
 function requireKey(name) {
