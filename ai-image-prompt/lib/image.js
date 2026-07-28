@@ -108,7 +108,24 @@ export async function generateImage(prompt) {
       { status: 500 },
     );
   }
-  return provider(prompt);
+  try {
+    return await provider(prompt);
+  } catch (err) {
+    // Node'un fetch()'i ağ hatalarında yalnızca "fetch failed" der; asıl neden
+    // (DNS, bağlantı reddi, TLS/proxy) err.cause içinde saklı — onu yüzeye çıkar.
+    if (err instanceof TypeError && err.message === "fetch failed" && err.cause) {
+      const cause = err.cause;
+      throw Object.assign(
+        new Error(
+          `${name} sağlayıcısına bağlanılamadı (${cause.code ?? cause.name ?? "bilinmeyen ağ hatası"}): ` +
+            `${cause.message ?? String(cause)}. İnternet bağlantınızı, VPN/proxy veya güvenlik duvarı ` +
+            `ayarlarınızı kontrol edin.`,
+        ),
+        { status: 502 },
+      );
+    }
+    throw err;
+  }
 }
 
 export function toDataUrl({ buffer, contentType }) {
