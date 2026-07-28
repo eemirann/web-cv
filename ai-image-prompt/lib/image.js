@@ -48,6 +48,37 @@ const PROVIDERS = {
     return { dataUrl: `data:image/png;base64,${json.data[0].b64_json}` };
   },
 
+  async huggingface(prompt) {
+    const model = process.env.HF_MODEL ?? "black-forest-labs/FLUX.1-schnell";
+    const base = process.env.HF_API_BASE ?? "https://router.huggingface.co/hf-inference/models";
+
+    const res = await fetch(`${base}/${model}`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${requireKey("HF_API_KEY")}`,
+        "content-type": "application/json",
+        accept: "image/png",
+      },
+      body: JSON.stringify({ inputs: prompt }),
+    });
+
+    // HF soğuk başlangıçta 503 + {estimated_time} döner; anlaşılır bir mesaja çeviriyoruz
+    if (res.status === 503) {
+      const info = await res.json().catch(() => ({}));
+      const wait = info.estimated_time ? ` (~${Math.ceil(info.estimated_time)} sn)` : "";
+      throw Object.assign(new Error(`Model yükleniyor${wait}, birazdan tekrar deneyin.`), { status: 503 });
+    }
+    if (!res.ok) throw await providerError("huggingface", res);
+
+    const type = res.headers.get("content-type") ?? "";
+    if (!type.startsWith("image/")) {
+      throw await providerError("huggingface", res); // hata gövdesi JSON olarak gelmiş
+    }
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { dataUrl: `data:${type};base64,${buffer.toString("base64")}` };
+  },
+
   async stability(prompt) {
     const form = new FormData();
     form.append("prompt", prompt);

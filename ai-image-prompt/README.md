@@ -33,8 +33,18 @@ için ayrı bir sağlayıcı gerekir; `IMAGE_PROVIDER` ile seçilir:
 | Değer | Gereken anahtar | Not |
 | --- | --- | --- |
 | `mock` (varsayılan) | — | Yer tutucu SVG döner; anahtarsız denemek için |
+| `huggingface` | `HF_API_KEY` | Varsayılan model `black-forest-labs/FLUX.1-schnell`; `HF_MODEL` ile değiştirilir |
 | `openai` | `OPENAI_API_KEY` | `gpt-image-1` |
 | `stability` | `STABILITY_API_KEY` | Stable Image Core |
+
+Hugging Face tarafında model soğuksa ilk istek 503 döner (`estimated_time`
+saniye sonra hazır olur); adaptör bunu anlaşılır bir mesaja çeviriyor, birkaç
+saniye sonra tekrar deneyin. Uç nokta `HF_API_BASE` ile değiştirilebilir —
+eski `https://api-inference.huggingface.co/models` adresi de aynı gövdeyi kabul eder.
+
+> Anahtarlar yalnızca `.env` içinde durur (`.gitignore`'da). Anahtarı kod içine
+> yazmayın ve sohbet/issue gibi yerlere yapıştırmayın; yapıştırdıysanız iptal edip
+> yenisini alın.
 
 Yeni sağlayıcı eklemek için `lib/image.js` içindeki `PROVIDERS` nesnesine
 `async (prompt) => ({ dataUrl })` imzalı bir fonksiyon ekleyin; başka yeri
